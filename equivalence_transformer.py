@@ -591,7 +591,7 @@ class EquivalenceTransformer:
         if valid_output_forms[]!=[]:
             process_norm(valid_output_forms,rule_original)
         else:
-            process_aagg(valid_output_forms)
+            process_aagg(valid_output_forms,rule_original)
     
     def process_norm(valid_output_forms,rule_original):
         equiv_output_forms = self.rewritable_forms()  # Determines available output forms for this rule
@@ -609,9 +609,29 @@ class EquivalenceTransformer:
             # Currently this only occurs for forms (2) and (3) because a cyclic dependency exists
             print "Warning! Rule:  %s\n\nCould not be rewritten due to a cyclic dependency." % rule_original
 
-    def process_aagg(valid_output_forms):
-        
-        
+    def process_aagg(valid_output_forms,rule_original):
+        if self.base_transformer.Setting.DEBUG:
+            print "equivalence_transformer: valid output forms:  " + str(
+                valid_output_forms)
+        if valid_output_forms.values().count([]) != 4:  # Any rewriting possible
+
+            # TODO: Perform all possible rewrites first and print rewritten
+            #        rules to the console with id options
+            #       Can handle multiple rewritings within a rule by performing
+            #        every combination of rewriting, and giving each its own id
+            selection_dict = print_valid_output_forms(valid_output_forms)
+            desired_input, desired_output = get_desired_input_output_form_pair(selection_dict)
+
+            
+
+            # TODO: implement rewrite_rule function to call a
+            #        rewrite_rule_x_input(output_id) function for the given
+            #        input, and perform projection as needed.
+            self.rewrite_rule(desired_input, desired_output)
+            self.print_rewrite(rule_original)
+            self.confirm_rewrite(
+                rule_original)  # Undoes rewriting if user denies rewrite
+
 
     def explore(self, x, data=TreeData()):
         """

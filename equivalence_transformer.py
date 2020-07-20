@@ -4,6 +4,8 @@ from tree_data import TreeData
 from ast_visitor import ASTCopier
 from predicate import Predicate, predicate_dependency
 from variable_counter import VariableCounter
+from aggregate_counter import AggregateCounter
+from ast_wrappers.literal import Literal
 
 def get_function_counting_literals(rule, counting_vars):
     """
@@ -385,6 +387,56 @@ def get_counting_function_args(counting_function, counting_vars):
     return reg_args, ret_var, anon_args
 
 
+def get_desired_input_output_form_pair(selection_dict):
+    """
+        Given a dictionary of  {id: (input form id, output form id)tuple}
+        Prompts the user for a selection via the id key
+        Returns the requested input form and output form ids
+    """
+    try:
+        option = int(raw_input("\nPlease select an input/output form pair by id  "))
+    except ValueError:  # int(non-numeric) raises a ValueError
+        option = -1
+    while option not in selection_dict.keys():
+        print "Invalid id selected."
+        try:
+            option = int(raw_input("\nPlease select an input/output form pair by id  "))
+        except ValueError:
+            option = -1
+    return selection_dict[option][0], selection_dict[option][1]
+
+
+ def print_valid_output_forms(valid_output_forms):
+    """
+        Prints to console all the available input/output form pairs, and
+            an id next to each for selection
+        Returns a dictionary of  {id: (input form id, output form id)tuple}
+    """
+    selection_dict = {}
+    print "\nValid Input/Output rewriting pairs:\n"
+    print "| ID |          Input Form          |         Output Form          |"
+
+     selection_id = 1
+    selection_id_padding = " "
+    for input_form in valid_output_forms.keys():
+        if len(valid_output_forms[input_form]) > 0:
+            print ""  # Skip line between different inputs
+            for valid_output_form in valid_output_forms[input_form]:
+                selection_dict[selection_id] = (input_form, valid_output_form)
+                if selection_id >= 10:
+                    selection_id_padding = ""
+
+                 print "| %s%s | %s%s | %s%s |" % \
+                      (selection_id_padding,
+                       selection_id,
+                       constants.FORM_TRANSLATION[input_form],
+                       constants.FORM_TRANSLATION_PADDING[input_form],
+                       constants.FORM_TRANSLATION[valid_output_form],
+                       constants.FORM_TRANSLATION_PADDING[valid_output_form])
+
+                 selection_id += 1
+    return selection_dict
+
 class EquivalenceTransformer:
     """
         This class is the basis for detecting and performing equivalence
@@ -397,6 +449,13 @@ class EquivalenceTransformer:
 
         self.variable_counter = VariableCounter()
         self.variable_counter_eq = VariableCounter()
+        self.aggregate_counter = AggregateCounter()
+        self.valid_output_forms = {
+            constants.NON_AGGR_FORM: [],
+            constants.AGGR_FORM1: [],
+            constants.AGGR_FORM2: [],
+            constants.AGGR_FORM3: []
+        }
         self.aux_rule = None
         self.aux_predicate = None
         self.rule_functions = []
@@ -404,7 +463,8 @@ class EquivalenceTransformer:
         self.counting_literals_groups=[]
         self.counting_variables = []
         self.counting_literals_eq = []
-
+        self.ag_counting_function=None
+        self.ag_guard_value=None
 
     def replace_equality_check(self, x, data=TreeData()):
         """
@@ -524,6 +584,16 @@ class EquivalenceTransformer:
         
 
         self.rule = self.explore(self.rule)  # Garners information for rewritability checking
+
+        #        ex:    :- 2<=#count{X:F(X)}, 2<=#count{Z:G(Z)}.
+        valid_output_forms = self.identify_output_forms(self.valid_output_forms)
+   
+        if valid_output_forms[]!=[]:
+            process_norm(valid_output_forms,rule_original)
+        else:
+            process_aagg(valid_output_forms)
+    
+    def process_norm(valid_output_forms,rule_original):
         equiv_output_forms = self.rewritable_forms()  # Determines available output forms for this rule
 
         if self.base_transformer.Setting.DEBUG:
@@ -538,6 +608,10 @@ class EquivalenceTransformer:
             # Equivalent output forms exist, but not for the requested form.
             # Currently this only occurs for forms (2) and (3) because a cyclic dependency exists
             print "Warning! Rule:  %s\n\nCould not be rewritten due to a cyclic dependency." % rule_original
+
+    def process_aagg(valid_output_forms):
+        
+        
 
     def explore(self, x, data=TreeData()):
         """

@@ -575,8 +575,12 @@ class EquivalenceTransformer:
         if self.base_transformer.Setting.DEBUG:
             print "equivalence_transformer: valid output forms:  " + str(equiv_output_forms)
 
-        if self.base_transformer.Setting.AGGR_FORM in equiv_output_forms:
-            self.rewrite_rule_norm()
+        selection_dict = print_valid_output_forms(valid_output_forms)
+        desired_input, desired_output = get_desired_input_output_form_pair(selection_dict)
+
+        #if self.base_transformer.Setting.AGGR_FORM in equiv_output_forms:
+        if desired_output in equiv_output_forms:        
+            self.rewrite_rule_norm(desired_output)
             self.print_rewrite(rule_original)
             self.confirm_rewrite(rule_original)  # Undoes rewriting if user denies rewrite
 
@@ -629,8 +633,10 @@ class EquivalenceTransformer:
    
         if valid_output_forms[constants.NON_AGGR_FORM]!=[]:
             self.process_norm(valid_output_forms,rule_original)
-        else:
+        elif valid_output_forms[constants.AGGR_FORM1]!=[] or valid_output_forms[constants.AGGR_FORM2]!=[] or valid_output_forms[constants.AGGR_FORM3]!=[]:
             self.process_aagg(valid_output_forms,rule_original)
+        else:
+            pass
     
 
 
@@ -1163,7 +1169,7 @@ class EquivalenceTransformer:
 
         return projection_predicate, aux_literal, aux_rule
 
-    def rewrite_rule_norm(self):
+    def rewrite_rule_norm(self,desired_output):
         """Performs aggregate rewriting on the given rule"""
         for lit in self.counting_literals:
             self.rule['body'].remove(lit)
@@ -1174,8 +1180,7 @@ class EquivalenceTransformer:
             cfun=get_counting_function_from_literals(lit)
             counting_functions.append(cfun)
         #counting_function = get_counting_function_from_literals(self.counting_literals)
-        rewritten_literals = self.create_aggregate_literals(counting_functions)
-
+        rewritten_literals = self.create_aggregate_literals(counting_functions,desired_output)
         projection_needed=False
         for cf in counting_functions:
             if len(cf['arguments']) > 1:
@@ -1201,6 +1206,7 @@ class EquivalenceTransformer:
         guard_value = self.ag_guard_value
 
         rewritten_literals = self.rewrite_aggregate_literals(desired_input, desired_output)
+
 
         '''
         if len(counting_function[
@@ -1354,7 +1360,7 @@ class EquivalenceTransformer:
 
 
 
-    def create_aggregate_literals(self, counting_functions):
+    def create_aggregate_literals(self, counting_functions,desired_output):
         """
             Given a function.
             Creates counting aggregate literal(s) of the user
@@ -1362,6 +1368,8 @@ class EquivalenceTransformer:
                 
             Returns aggregate literal(s) as a list
         """
+
+        #desired_output=self.base_transformer.Setting.AGGR_FORM
         counting_function_grps=[]
         for counting_function in counting_functions:
             counting_function_grp=[]
@@ -1438,7 +1446,7 @@ class EquivalenceTransformer:
         num_counting_vars = len(self.counting_variables)  # Let b be the number of counting variables
 
         # Make aggregate of one of three output forms, as specified by the user
-        if self.base_transformer.Setting.AGGR_FORM == 3:
+        if desired_output == constants.AGGR_FORM3:
             # Form:  not b-1={}, not b-2={}, ..., not 0={}
 
             aggr_literals = []
@@ -1465,7 +1473,7 @@ class EquivalenceTransformer:
                 aggr_literal = clingo.ast.Literal(constants.LOCATION, clingo.ast.Sign.Negation, rwn_aggr)
                 aggr_literals.append(aggr_literal)
 
-        elif self.base_transformer.Setting.AGGR_FORM == 2:
+        elif desired_output == constants.AGGR_FORM2:
             # Form:  not {} < b
 
             aggr_left_guard = None

@@ -588,7 +588,7 @@ class EquivalenceTransformer:
         #        ex:    :- 2<=#count{X:F(X)}, 2<=#count{Z:G(Z)}.
         valid_output_forms = self.identify_output_forms(self.valid_output_forms)
    
-        if valid_output_forms[]!=[]:
+        if valid_output_forms[constants.NON_AGGR_FORM]!=[]:
             process_norm(valid_output_forms,rule_original)
         else:
             process_aagg(valid_output_forms,rule_original)
@@ -650,6 +650,11 @@ class EquivalenceTransformer:
                 if not data.head:
                     self.rule_functions.append(x)
 
+            # Record aggregate literals for use in rewritability checking
+            elif x.type == clingo.ast.ASTType.Literal and \
+                    x['atom'].type == clingo.ast.ASTType.BodyAggregate:
+                self.aggregate_counter.record_aggregate_literal(x)
+
             return self.explore_children(x, data)
 
         elif isinstance(x, list):
@@ -664,6 +669,20 @@ class EquivalenceTransformer:
             attr = self.explore(x[key], TreeData(data.head or key == "head"))
             x[key] = attr
         return x
+
+    def identify_output_forms(self, valid_output_forms):
+        """
+            Given empty dict of  {input_form_id: []}
+            Identifies for each input form the valid output forms
+            Returns populated dict of  {input_form_id: [valid_output_form_ids]}
+        """
+        valid_output_forms[constants.NON_AGGR_FORM] = self.identify_output_forms_non_aggregate_input()
+        valid_output_forms[constants.AGGR_FORM1] = self.identify_output_forms_aggregate_form1_input()
+        valid_output_forms[constants.AGGR_FORM2] = self.identify_output_forms_aggregate_form2_input()
+        valid_output_forms[constants.AGGR_FORM3] = self.identify_output_forms_aggregate_form3_input()
+
+        return valid_output_forms
+
 
     def print_rewrite(self, rule_before_rewriting):
         """
@@ -731,8 +750,12 @@ class EquivalenceTransformer:
             for entry in node:
                 ret = ret or self.counting_vars_used_elsewhere_helper(entry, counting_vars)
             return ret
+        
+        elif node is None:
+            return False
 
         else:
+            print "unexpected type of node: %s" % node
             raise TypeError("unexpected type")
 
     def circular_dependencies(self, counting_predicate):
@@ -773,6 +796,52 @@ class EquivalenceTransformer:
         # head predicates will be the only predicates with dependencies
         return predicate_map.keys()
 
+    def identify_output_forms_non_aggregate_input(self):
+        """
+            Checks if the rule meets conditions to be rewritable by 
+                aggregate equivalence for the given form.
+            Forms (2) and (3) must satisfy the additional condition that 
+                the counting predicate does not depend on the head predicates
+            Returns the list of valid output forms for potential rewriting
+        """
+        counting_vars = self.variable_counter.get_counting_variables()
+        if len(counting_vars) < 2:
+            return []
+
+        check_rule = ASTCopier().deep_copy(self.rule)
+
+        counting_literals = get_function_counting_literals(check_rule,
+                                                           counting_vars)
+        counting_literals += get_comparison_counting_literals(check_rule,
+                                                              counting_vars)
+        if len(counting_literals) < 3:
+            # Must be at least two counting functions and one comparison
+            return []
+
+        if self.counting_vars_used_elsewhere(check_rule,
+                                             counting_literals,
+                                             counting_vars):
+            return []
+
+        counting_function = get_counting_function_from_literals(
+            counting_literals)
+        counting_predicate = Predicate(counting_function['name'],
+                                       len(counting_function['arguments']))
+
+        # record counting literal and variable information for performing rewriting later
+        self.counting_literals = counting_literals
+        self.counting_variables = counting_vars
+
+        
+
+        if self.circular_dependencies(counting_predicate):
+            valid_forms = [constants.AGGR_FORM1]
+        else:
+            valid_forms = [constants.AGGR_FORM1,
+                           constants.AGGR_FORM2,
+                           constants.AGGR_FORM3]
+        return valid_forms
+        
     def rewritable_forms(self):
         """
             Checks if the rule meets conditions to be rewritable by 

@@ -684,6 +684,249 @@ class EquivalenceTransformer:
         return valid_output_forms
 
 
+    def identify_output_forms_non_aggregate_input(self):
+        """
+            Checks if the rule meets conditions to be rewritable by 
+                aggregate equivalence for the given form.
+            Forms (2) and (3) must satisfy the additional condition that 
+                the counting predicate does not depend on the head predicates
+            Returns the list of valid output forms for potential rewriting
+        """
+        counting_vars = self.variable_counter.get_counting_variables()
+        if len(counting_vars) < 2:
+            return []
+
+        check_rule = ASTCopier().deep_copy(self.rule)
+
+        counting_literals = get_function_counting_literals(check_rule,
+                                                           counting_vars)
+        counting_literals += get_comparison_counting_literals(check_rule,
+                                                              counting_vars)
+        if len(counting_literals) < 3:
+            # Must be at least two counting functions and one comparison
+            return []
+
+        if self.counting_vars_used_elsewhere(check_rule,
+                                             counting_literals,
+                                             counting_vars):
+            return []
+
+        counting_function = get_counting_function_from_literals(
+            counting_literals)
+        counting_predicate = Predicate(counting_function['name'],
+                                       len(counting_function['arguments']))
+
+        # record counting literal and variable information for performing rewriting later
+        self.counting_literals = counting_literals
+        self.counting_variables = counting_vars
+
+        
+
+        if self.circular_dependencies(counting_predicate):
+            valid_forms = [constants.AGGR_FORM1]
+        else:
+            valid_forms = [constants.AGGR_FORM1,
+                           constants.AGGR_FORM2,
+                           constants.AGGR_FORM3]
+        return valid_forms
+
+    def identify_output_forms_aggregate_form1_input(self):
+        """
+            Identify whether rule is candidate for rewriting from the aggregate
+                form 1 into any other form.
+            Forms (2) and (3) must satisfy the additional condition that
+                the counting predicate does not depend on the head predicates
+            Returns list of IDs of valid output forms.
+
+            TODO: Handle when |Y|>0
+            TODO: Verification of rewriting for all sets of rewritable
+                    aggregate literals within a rule, and recording of this
+                    verification
+        """
+        aggregate_data = self.aggregate_counter.rewritable_aggregate_data[constants.AGGR_FORM1]
+        if len(aggregate_data) == 0:
+            return []  # no valid forms
+
+        # TODO: Verification and recording of EACH possible aggregate literal
+        aggregate_data_tuple = aggregate_data[0]
+
+        counting_variable = aggregate_data_tuple[0]
+        counting_function = aggregate_data_tuple[1]
+        guard_value = aggregate_data_tuple[2]
+        aggregate_literal = aggregate_data_tuple[3]
+
+        if guard_value < 2:  # aggregate guard less than 2
+            return []  # no valid forms
+
+        check_rule = ASTCopier().deep_copy(self.rule)
+        if self.counting_vars_used_elsewhere(check_rule,
+                                             [aggregate_literal],
+                                             [str(counting_variable)]):
+            return []
+
+        # record counting literal and variable information for performing rewriting later
+        # TODO: New way of recording counting literals and variables
+        self.counting_literals = [aggregate_literal]
+        self.counting_variables = [str(counting_variable)]
+        self.ag_counting_function=counting_function
+        self.ag_guard_value=guard_value
+
+        counting_predicate = Predicate(counting_function['name'],
+                                       len(counting_function['arguments']))
+        if self.circular_dependencies(counting_predicate):
+            valid_forms = [constants.NON_AGGR_FORM]
+        else:
+            valid_forms = [constants.NON_AGGR_FORM,
+                           constants.AGGR_FORM2,
+                           constants.AGGR_FORM3]
+        return valid_forms
+
+    def identify_output_forms_aggregate_form2_input(self):
+        """
+            Identify whether rule is candidate for rewriting from the aggregate
+                form 2 into any other form.
+            Forms non-aggregate and inequality must satisfy the additional
+                condition that the counting predicate does not depend on the
+                head predicates
+            Returns list of IDs of valid output forms.
+
+            TODO: Handle when |Y|>0
+            TODO: Verification of rewriting for all sets of rewritable
+                    aggregate literals within a rule, and recording of this
+                    verification
+        """
+        aggregate_data = self.aggregate_counter.rewritable_aggregate_data[constants.AGGR_FORM2]
+        if len(aggregate_data) == 0:
+            return []  # no valid forms
+
+        # TODO: Verification and recording of EACH possible aggregate literal
+        aggregate_data_tuple = aggregate_data[0]
+
+        counting_variable = aggregate_data_tuple[0]
+        counting_function = aggregate_data_tuple[1]
+        guard_value = aggregate_data_tuple[2]
+        aggregate_literal = aggregate_data_tuple[3]
+
+        self.ag_counting_function=counting_function
+        self.ag_guard_value=guard_value
+
+        if guard_value < 2:  # aggregate guard less than 2
+            return []  # no valid forms
+
+        check_rule = ASTCopier().deep_copy(self.rule)
+        # TODO: Fix this check. Not working in tests/testInequalityAggregateInput.lp
+        if self.counting_vars_used_elsewhere(check_rule,
+                                             [aggregate_literal],
+                                             [str(counting_variable)]):
+            return []
+
+        # record counting literal and variable information for performing rewriting later
+        # TODO: New way of recording counting literals and variables
+        self.counting_literals = [aggregate_literal]
+        self.counting_variables = [str(counting_variable)]
+
+        counting_predicate = Predicate(counting_function['name'],
+                                       len(counting_function['arguments']))
+        if self.circular_dependencies(counting_predicate):
+            valid_forms = [constants.AGGR_FORM3]
+        else:
+            valid_forms = [constants.NON_AGGR_FORM,
+                           constants.AGGR_FORM1,
+                           constants.AGGR_FORM3]
+        return valid_forms
+
+    def identify_output_forms_aggregate_form3_input(self):
+        """
+            Identify whether rule is candidate for rewriting from the aggregate
+                form 3 into any other form.
+            Forms non-aggregate and inequality must satisfy the additional
+                condition that the counting predicate does not depend on the
+                head predicates
+            Returns list of IDs of valid output forms.
+
+            TODO: Handle when |Y|>0
+            TODO: Verification of rewriting for all sets of rewritable
+                    aggregate literals within a rule, and recording of this
+                    verification
+        """
+        aggregate_data = self.aggregate_counter.rewritable_aggregate_data[constants.AGGR_FORM3]
+        if len(aggregate_data) == 0:
+            return []  # no valid forms
+
+        aggregate_literal_sets = {}
+        # Format:  { aggregate_literal_elements :
+        #            [[counting_variable, counting_function],
+        #             {guard values: aggregate_literals}] }
+        for aggregate_data_tuple in aggregate_data:
+            counting_variable = aggregate_data_tuple[0]
+            counting_function = aggregate_data_tuple[1]
+            guard_value = aggregate_data_tuple[2]
+            aggregate_literal = aggregate_data_tuple[3]
+
+            self.ag_counting_function=counting_function
+            self.ag_guard_value=guard_value
+
+            # AST objects are not hashable for keys, so use their string
+            #  representations instead. Use the elements because the only
+            #  difference we want to find is in the guard values.
+            aggregate_string_key = str(aggregate_literal['atom']['elements'])
+            if aggregate_string_key not in aggregate_literal_sets.keys():
+                aggregate_literal_sets[aggregate_string_key] = [
+                    [counting_variable, counting_function],
+                    {guard_value: aggregate_literal}]
+            else:
+                aggregate_literal_sets[aggregate_string_key][1][guard_value] = aggregate_literal
+
+        # TODO: Verification and recording of EACH possible set of
+        #  aggregate literals
+        aggregate_literal_set = aggregate_literal_sets[aggregate_literal_sets.keys()[0]]
+        counting_variable = aggregate_literal_set[0][0]
+        counting_function = aggregate_literal_set[0][1]
+        guard_values = aggregate_literal_set[1].keys()
+        guard_values.sort()
+
+
+
+
+        # find highest b value for the set
+        max_guard_value = -1
+        while list(range(max_guard_value + 2)) == guard_values[:max_guard_value+2]:
+            max_guard_value += 1
+
+        if max_guard_value < 1:
+            return []  # no valid forms
+
+
+        self.ag_counting_function=counting_function
+        self.ag_guard_value=max_guard_value+1
+
+        aggregate_literals = []
+        for guard_value in guard_values[:max_guard_value+1]:
+            aggregate_literals.append(aggregate_literal_set[1][guard_value])
+
+        check_rule = ASTCopier().deep_copy(self.rule)
+        if self.counting_vars_used_elsewhere(check_rule,
+                                             aggregate_literals,
+                                             [str(counting_variable)]):
+            return []
+
+        # record counting literal and variable information for performing rewriting later
+        # TODO: New way of recording counting literals and variables
+        self.counting_literals = aggregate_literals
+        self.counting_variables = [str(counting_variable)]
+
+        counting_predicate = Predicate(counting_function['name'],
+                                       len(counting_function['arguments']))
+        if self.circular_dependencies(counting_predicate):
+            valid_forms = [constants.AGGR_FORM2]
+        else:
+            valid_forms = [constants.NON_AGGR_FORM,
+                           constants.AGGR_FORM1,
+                           constants.AGGR_FORM2
+                           ]
+        return valid_forms
+
+
     def print_rewrite(self, rule_before_rewriting):
         """
             Prints to console the rule before and after rewriting, and
@@ -796,52 +1039,8 @@ class EquivalenceTransformer:
         # head predicates will be the only predicates with dependencies
         return predicate_map.keys()
 
-    def identify_output_forms_non_aggregate_input(self):
-        """
-            Checks if the rule meets conditions to be rewritable by 
-                aggregate equivalence for the given form.
-            Forms (2) and (3) must satisfy the additional condition that 
-                the counting predicate does not depend on the head predicates
-            Returns the list of valid output forms for potential rewriting
-        """
-        counting_vars = self.variable_counter.get_counting_variables()
-        if len(counting_vars) < 2:
-            return []
+    
 
-        check_rule = ASTCopier().deep_copy(self.rule)
-
-        counting_literals = get_function_counting_literals(check_rule,
-                                                           counting_vars)
-        counting_literals += get_comparison_counting_literals(check_rule,
-                                                              counting_vars)
-        if len(counting_literals) < 3:
-            # Must be at least two counting functions and one comparison
-            return []
-
-        if self.counting_vars_used_elsewhere(check_rule,
-                                             counting_literals,
-                                             counting_vars):
-            return []
-
-        counting_function = get_counting_function_from_literals(
-            counting_literals)
-        counting_predicate = Predicate(counting_function['name'],
-                                       len(counting_function['arguments']))
-
-        # record counting literal and variable information for performing rewriting later
-        self.counting_literals = counting_literals
-        self.counting_variables = counting_vars
-
-        
-
-        if self.circular_dependencies(counting_predicate):
-            valid_forms = [constants.AGGR_FORM1]
-        else:
-            valid_forms = [constants.AGGR_FORM1,
-                           constants.AGGR_FORM2,
-                           constants.AGGR_FORM3]
-        return valid_forms
-        
     def rewritable_forms(self):
         """
             Checks if the rule meets conditions to be rewritable by 
@@ -988,6 +1187,169 @@ class EquivalenceTransformer:
             rewritten_literals.append(aux_lit)
 
         self.rule['body'] += rewritten_literals
+
+    def rewrite_rule(self,desired_input, desired_output):
+        """Performs aggregate rewriting on the given input and output form"""
+        for lit in self.counting_literals:
+            self.rule['body'].remove(lit)
+
+        counting_function = self.ag_counting_function
+        
+        guard_value = self.ag_guard_value
+
+        rewritten_literals = self.rewrite_aggregate_literals(desired_input, desired_output)
+
+        '''
+        if len(counting_function[
+                   'arguments']) > 1:  # Projection needed if function has multiple arguments
+            aux_predicate, aux_lit, aux_rule = self.make_auxiliary_definition(
+                counting_function)
+            self.aux_predicate = aux_predicate
+            self.aux_rule = aux_rule
+
+            rewritten_literals.append(aux_lit)
+        '''
+        self.rule['body'] += rewritten_literals
+
+    def rewrite_aggregate_literals(self,desired_input, desired_output):
+        
+        counting_function = self.ag_counting_function
+        guard_value = self.ag_guard_value
+
+        '''
+        if desired_input==constants.AGGR_FORM1:
+            guard_value = self.ag_guard_value
+        '''
+        ret=[]
+        if desired_output==constants.NON_AGGR_FORM:
+            allaaggvariables=[]
+            args = counting_function['arguments'][:]
+            counting_var=self.counting_variables[0]
+
+            for guardid in range(1,guard_value+1):
+                new_args=[]
+                for arg in args:
+                    if str(arg) == counting_var:
+                        aaggvariable=clingo.ast.Variable(constants.LOCATION, str(arg)+'_AAGG_'+str(guardid))
+                        allaaggvariables.append(aaggvariable)
+                        new_args.append(aaggvariable)
+                    else:
+                        new_args.append(arg)
+
+                aux_function = clingo.ast.Function(constants.LOCATION,
+                                           counting_function.name,
+                                           new_args,
+                                           False)
+                aux_literal = clingo.ast.Literal(constants.LOCATION,
+                                         clingo.ast.Sign.NoSign,
+                                         clingo.ast.SymbolicAtom(aux_function))
+                
+                ret.append(aux_literal)
+            for i,v in enumerate (allaaggvariables[:-1]):
+                leftv=allaaggvariables[i]
+                rightv=allaaggvariables[i+1]
+                cmpterm=clingo.ast.Comparison(clingo.ast.ComparisonOperator.LessThan,leftv,rightv)
+
+                new_liter=clingo.ast.Literal(constants.LOCATION,
+                                         clingo.ast.Sign.NoSign,
+                                         cmpterm)
+                ret.append(new_liter)
+        if desired_output==constants.AGGR_FORM2:
+            counting_var=self.counting_variables[0]
+            rewritten_func=self.ag_counting_function
+            rewritten_lit=clingo.ast.Literal(constants.LOCATION,
+                                               clingo.ast.Sign.NoSign,
+                                               clingo.ast.SymbolicAtom(rewritten_func))
+            
+            aggregate_components = [clingo.ast.BodyAggregateElement([counting_var], [rewritten_lit])]
+
+            # Form:  not {} < b
+            aggr_left_guard = None
+            aggr_right_guard = clingo.ast.AggregateGuard(clingo.ast.ComparisonOperator.LessThan,
+                                                         clingo.ast.Symbol(constants.LOCATION, guard_value))
+
+            if self.base_transformer.Setting.USE_ANON:
+                rwn_aggr = clingo.ast.Aggregate(constants.LOCATION,
+                                                aggr_left_guard,
+                                                aggregate_components,
+                                                aggr_right_guard)
+            else:
+                rwn_aggr = clingo.ast.BodyAggregate(constants.LOCATION,
+                                                    aggr_left_guard,
+                                                    clingo.ast.AggregateFunction.Count,
+                                                    aggregate_components,
+                                                    aggr_right_guard)
+
+            ret = [clingo.ast.Literal(constants.LOCATION, clingo.ast.Sign.Negation, rwn_aggr)]
+
+        if desired_output==constants.AGGR_FORM1:
+            counting_var=self.counting_variables[0]
+            rewritten_func=self.ag_counting_function
+            rewritten_lit=clingo.ast.Literal(constants.LOCATION,
+                                               clingo.ast.Sign.NoSign,
+                                               clingo.ast.SymbolicAtom(rewritten_func))
+            
+            aggregate_components = [clingo.ast.BodyAggregateElement([counting_var], [rewritten_lit])]
+
+            # Form:  b <= {}
+            aggr_left_guard =  clingo.ast.AggregateGuard(clingo.ast.ComparisonOperator.LessEqual,
+                                                        clingo.ast.Symbol(constants.LOCATION, guard_value))
+            aggr_right_guard = None
+
+
+            if self.base_transformer.Setting.USE_ANON:
+                rwn_aggr = clingo.ast.Aggregate(constants.LOCATION,
+                                                aggr_left_guard,
+                                                aggregate_components,
+                                                aggr_right_guard)
+            else:
+                rwn_aggr = clingo.ast.BodyAggregate(constants.LOCATION,
+                                                    aggr_left_guard,
+                                                    clingo.ast.AggregateFunction.Count,
+                                                    aggregate_components,
+                                                    aggr_right_guard)
+
+            ret = [clingo.ast.Literal(constants.LOCATION, clingo.ast.Sign.NoSign, rwn_aggr)]
+
+
+        if desired_output==constants.AGGR_FORM3:
+
+            counting_var=self.counting_variables[0]
+            rewritten_func=self.ag_counting_function
+            rewritten_lit=clingo.ast.Literal(constants.LOCATION,
+                                               clingo.ast.Sign.NoSign,
+                                               clingo.ast.SymbolicAtom(rewritten_func))
+            
+            aggregate_components = [clingo.ast.BodyAggregateElement([counting_var], [rewritten_lit])]
+
+            ret = []
+            for i in range(1, guard_value + 1):  # range 1..b
+
+                aggr_left_guard = clingo.ast.AggregateGuard(clingo.ast.ComparisonOperator.Equal,
+                                                            clingo.ast.Symbol(constants.LOCATION,
+                                                                              guard_value - i))
+                aggr_right_guard = None
+
+                # Use specified aggregate inside form (see above)
+                if self.base_transformer.Setting.USE_ANON:
+                    rwn_aggr = clingo.ast.Aggregate(constants.LOCATION,
+                                                    aggr_left_guard,
+                                                    aggregate_components,
+                                                    aggr_right_guard)
+                else:
+                    rwn_aggr = clingo.ast.BodyAggregate(constants.LOCATION,
+                                                        aggr_left_guard,
+                                                        clingo.ast.AggregateFunction.Count,
+                                                        aggregate_components,
+                                                        aggr_right_guard)
+
+                aggr_literal = clingo.ast.Literal(constants.LOCATION, clingo.ast.Sign.Negation, rwn_aggr)
+                ret.append(aggr_literal)
+
+        return ret
+
+
+
 
     def create_aggregate_literals(self, counting_functions):
         """
@@ -1143,3 +1505,4 @@ class EquivalenceTransformer:
             aggr_literals = [clingo.ast.Literal(constants.LOCATION, clingo.ast.Sign.NoSign, rwn_aggr)]
 
         return aggr_literals
+

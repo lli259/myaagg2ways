@@ -616,9 +616,9 @@ class EquivalenceTransformer:
         """
             Processes a rule to perform rewriting
         """
-        if self.base_transformer.Setting.DEBUG:
-            print "equivalence_transformer: processing rule:  %s" % self.rule
-
+        #if self.base_transformer.Setting.DEBUG:
+            #print "equivalence_transformer: processing rule:  %s" % self.rule
+        print "equivalence_transformer: processing rule:  %s" % self.rule
         rule_original = ASTCopier().deep_copy(self.rule)  # For resetting rule if rewrite is denied by user
 
         #replace x1=x2,x2=x3,x3=x4,with x1

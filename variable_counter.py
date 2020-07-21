@@ -26,6 +26,10 @@ def convert_binary_op_to_var_plus_int(term):
             if term['left'].type == clingo.ast.ASTType.Variable and \
                     term['right'].type == clingo.ast.ASTType.Symbol:
                 value = int(str(term['right']['symbol']))  # Can this cause errors?
+                # TODO: Error handling for conversion of symbol to int when
+                #        symbol is alphabetic instead of numeric.
+                #       Note that adding an alphabetic value is logic nonsense,
+                #        but is syntactically valid
                 return term['left'], (value * multiplier)
 
             # Must also ensure variable is not being subtracted

@@ -406,7 +406,7 @@ def get_desired_input_output_form_pair(selection_dict):
     return selection_dict[option][0], selection_dict[option][1]
 
 
- def print_valid_output_forms(valid_output_forms):
+def print_valid_output_forms(valid_output_forms):
     """
         Prints to console all the available input/output form pairs, and
             an id next to each for selection
@@ -416,7 +416,7 @@ def get_desired_input_output_form_pair(selection_dict):
     print "\nValid Input/Output rewriting pairs:\n"
     print "| ID |          Input Form          |         Output Form          |"
 
-     selection_id = 1
+    selection_id = 1
     selection_id_padding = " "
     for input_form in valid_output_forms.keys():
         if len(valid_output_forms[input_form]) > 0:
@@ -426,7 +426,7 @@ def get_desired_input_output_form_pair(selection_dict):
                 if selection_id >= 10:
                     selection_id_padding = ""
 
-                 print "| %s%s | %s%s | %s%s |" % \
+                print "| %s%s | %s%s | %s%s |" % \
                       (selection_id_padding,
                        selection_id,
                        constants.FORM_TRANSLATION[input_form],
@@ -434,7 +434,7 @@ def get_desired_input_output_form_pair(selection_dict):
                        constants.FORM_TRANSLATION[valid_output_form],
                        constants.FORM_TRANSLATION_PADDING[valid_output_form])
 
-                 selection_id += 1
+                selection_id += 1
     return selection_dict
 
 class EquivalenceTransformer:
@@ -568,7 +568,46 @@ class EquivalenceTransformer:
                 '''
 
                 
-        
+
+    def process_norm(self,valid_output_forms,rule_original):
+        equiv_output_forms = self.rewritable_forms()  # Determines available output forms for this rule
+
+        if self.base_transformer.Setting.DEBUG:
+            print "equivalence_transformer: valid output forms:  " + str(equiv_output_forms)
+
+        if self.base_transformer.Setting.AGGR_FORM in equiv_output_forms:
+            self.rewrite_rule_norm()
+            self.print_rewrite(rule_original)
+            self.confirm_rewrite(rule_original)  # Undoes rewriting if user denies rewrite
+
+        elif len(equiv_output_forms) > 0:
+            # Equivalent output forms exist, but not for the requested form.
+            # Currently this only occurs for forms (2) and (3) because a cyclic dependency exists
+            print "Warning! Rule:  %s\n\nCould not be rewritten due to a cyclic dependency." % rule_original
+
+    def process_aagg(self,valid_output_forms,rule_original):
+        if self.base_transformer.Setting.DEBUG:
+            print "equivalence_transformer: valid output forms:  " + str(
+                valid_output_forms)
+        if valid_output_forms.values().count([]) != 4:  # Any rewriting possible
+
+            # TODO: Perform all possible rewrites first and print rewritten
+            #        rules to the console with id options
+            #       Can handle multiple rewritings within a rule by performing
+            #        every combination of rewriting, and giving each its own id
+            selection_dict = print_valid_output_forms(valid_output_forms)
+            desired_input, desired_output = get_desired_input_output_form_pair(selection_dict)
+
+            
+
+            # TODO: implement rewrite_rule function to call a
+            #        rewrite_rule_x_input(output_id) function for the given
+            #        input, and perform projection as needed.
+            self.rewrite_rule_aagg(desired_input, desired_output)
+            self.print_rewrite(rule_original)
+            self.confirm_rewrite(
+                rule_original)  # Undoes rewriting if user denies rewrite
+
     def process(self):
         """
             Processes a rule to perform rewriting
@@ -589,48 +628,11 @@ class EquivalenceTransformer:
         valid_output_forms = self.identify_output_forms(self.valid_output_forms)
    
         if valid_output_forms[constants.NON_AGGR_FORM]!=[]:
-            process_norm(valid_output_forms,rule_original)
+            self.process_norm(valid_output_forms,rule_original)
         else:
-            process_aagg(valid_output_forms,rule_original)
+            self.process_aagg(valid_output_forms,rule_original)
     
-    def process_norm(valid_output_forms,rule_original):
-        equiv_output_forms = self.rewritable_forms()  # Determines available output forms for this rule
 
-        if self.base_transformer.Setting.DEBUG:
-            print "equivalence_transformer: valid output forms:  " + str(equiv_output_forms)
-
-        if self.base_transformer.Setting.AGGR_FORM in equiv_output_forms:
-            self.rewrite_rule()
-            self.print_rewrite(rule_original)
-            self.confirm_rewrite(rule_original)  # Undoes rewriting if user denies rewrite
-
-        elif len(equiv_output_forms) > 0:
-            # Equivalent output forms exist, but not for the requested form.
-            # Currently this only occurs for forms (2) and (3) because a cyclic dependency exists
-            print "Warning! Rule:  %s\n\nCould not be rewritten due to a cyclic dependency." % rule_original
-
-    def process_aagg(valid_output_forms,rule_original):
-        if self.base_transformer.Setting.DEBUG:
-            print "equivalence_transformer: valid output forms:  " + str(
-                valid_output_forms)
-        if valid_output_forms.values().count([]) != 4:  # Any rewriting possible
-
-            # TODO: Perform all possible rewrites first and print rewritten
-            #        rules to the console with id options
-            #       Can handle multiple rewritings within a rule by performing
-            #        every combination of rewriting, and giving each its own id
-            selection_dict = print_valid_output_forms(valid_output_forms)
-            desired_input, desired_output = get_desired_input_output_form_pair(selection_dict)
-
-            
-
-            # TODO: implement rewrite_rule function to call a
-            #        rewrite_rule_x_input(output_id) function for the given
-            #        input, and perform projection as needed.
-            self.rewrite_rule(desired_input, desired_output)
-            self.print_rewrite(rule_original)
-            self.confirm_rewrite(
-                rule_original)  # Undoes rewriting if user denies rewrite
 
 
     def explore(self, x, data=TreeData()):
@@ -699,7 +701,7 @@ class EquivalenceTransformer:
         check_rule = ASTCopier().deep_copy(self.rule)
 
         counting_literals = get_function_counting_literals(check_rule,
-                                                           counting_vars)
+                                                           counting_vars)[0]
         counting_literals += get_comparison_counting_literals(check_rule,
                                                               counting_vars)
         if len(counting_literals) < 3:
@@ -953,7 +955,8 @@ class EquivalenceTransformer:
                 print("Rule rewriting denied.\n")
                 self.aux_rule = None
                 self.rule = rule_before_rewriting
-                self.base_transformer.new_predicates.remove(self.aux_predicate)
+                if len(self.base_transformer.new_predicates)!=0:
+                    self.base_transformer.new_predicates.remove(self.aux_predicate)
             else:
                 print("Rule rewriting confirmed.\n")
 
@@ -1160,7 +1163,7 @@ class EquivalenceTransformer:
 
         return projection_predicate, aux_literal, aux_rule
 
-    def rewrite_rule(self):
+    def rewrite_rule_norm(self):
         """Performs aggregate rewriting on the given rule"""
         for lit in self.counting_literals:
             self.rule['body'].remove(lit)
@@ -1188,7 +1191,7 @@ class EquivalenceTransformer:
 
         self.rule['body'] += rewritten_literals
 
-    def rewrite_rule(self,desired_input, desired_output):
+    def rewrite_rule_aagg(self,desired_input, desired_output):
         """Performs aggregate rewriting on the given input and output form"""
         for lit in self.counting_literals:
             self.rule['body'].remove(lit)
